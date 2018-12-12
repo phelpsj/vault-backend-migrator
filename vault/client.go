@@ -2,6 +2,7 @@ package vault
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"github.com/hashicorp/vault/api"
 	"os"
@@ -75,10 +76,38 @@ func (v *Vault) Read(path string) map[string]string {
 		return out
 	}
 	for k, v := range s.Data {
-		r, ok := v.(string)
-		if !ok {
-			fmt.Printf("error reading value at %s, key=%s\n", path, k)
+		// value v can be:
+		// bool, for JSON booleans
+		// float64, for JSON numbers
+		// string, for JSON strings
+		// []interface{}, for JSON arrays
+		// map[string]interface{}, for JSON objects
+		// nil for JSON null
+		//
+		// currently handles string, bool and json.Number
+		// TODO handle map[string]interface{} and []interface{}
+		r := ""
+		if v != nil {
+			switch v.(type) {
+			case string:
+				s, ok := v.(string)
+				if !ok {
+					fmt.Printf("error converting string")
+				}
+				r = s
+			case json.Number:
+				r = string(v.(json.Number))
+			case bool:
+				if v.(bool) {
+					r = "true"
+				} else {
+					r = "false"
+				}
+			default:
+				fmt.Printf("error reading value at %s, key=%s, type=%T\n", path, k, v)
+			}
 		}
+
 		e := base64.StdEncoding.EncodeToString([]byte(r))
 		out[k] = e
 	}
